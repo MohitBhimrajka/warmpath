@@ -591,6 +591,62 @@ a {
   margin: 0 0 16px;
 }
 
+.ingest-box {
+  width: 100%;
+  resize: vertical;
+  background: var(--surface);
+  border: 1px solid var(--cold);
+  border-radius: var(--r);
+  color: var(--text);
+  padding: 14px 16px;
+  line-height: 1.55;
+}
+.ingest-box::placeholder {
+  color: var(--text-mute);
+}
+.ingest-box:focus {
+  outline: none;
+  border-color: var(--ember);
+  box-shadow: 0 0 0 3px rgba(242, 166, 90, 0.45);
+}
+
+.ingest-fact {
+  border-bottom: 1px solid var(--line);
+  padding: 18px 0;
+}
+.ingest-fact-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ingest-person {
+  font-size: 16px;
+  font-weight: 600;
+}
+.ingest-arrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.ingest-skill {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ember);
+}
+.ingest-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--consent);
+  border: 1px solid rgba(95, 176, 138, 0.4);
+  border-radius: 3px;
+  padding: 2px 7px;
+}
+
 .ask-note {
   border: 1px solid var(--line);
   border-radius: var(--r);

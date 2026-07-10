@@ -50,6 +50,7 @@ export const auth = {
 export const me = () => fn('me', null, 'GET');
 export const search = (question) => fn('search', { question });
 export const explain = (searchId) => fn('explain', { searchId });
+export const ingest = (text) => fn('ingest', { text });
 
 export const intros = {
   list: () => fn('intro', null, 'GET'),

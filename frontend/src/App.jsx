@@ -3,6 +3,7 @@ import { me as fetchMe, billing, auth, getToken } from './api';
 import Login from './Login';
 import SearchView from './SearchView';
 import InboxView from './InboxView';
+import IngestView from './IngestView';
 
 const FOCUSABLE = 'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
@@ -185,6 +186,9 @@ export default function App() {
             <button aria-current={view === 'search' ? 'page' : undefined} onClick={() => setView('search')}>
               Search
             </button>
+            <button aria-current={view === 'ingest' ? 'page' : undefined} onClick={() => setView('ingest')}>
+              Grow the graph
+            </button>
             <button aria-current={view === 'inbox' ? 'page' : undefined} onClick={() => setView('inbox')}>
               Introductions
               {pending > 0 && (
@@ -250,11 +254,16 @@ export default function App() {
               </button>
             </div>
           )}
-          {view === 'search' ? (
-            <SearchView onUsage={onUsage} onPaywall={openPaywall} />
-          ) : (
-            <InboxView onRefresh={refresh} />
+          {view === 'search' && <SearchView onUsage={onUsage} onPaywall={openPaywall} />}
+          {view === 'ingest' && (
+            <IngestView
+              onSearchSkill={(q) => {
+                sessionStorage.setItem('warmpath.pendingQuestion', q);
+                setView('search');
+              }}
+            />
           )}
+          {view === 'inbox' && <InboxView onRefresh={refresh} />}
         </main>
       </div>
 

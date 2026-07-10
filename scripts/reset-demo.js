@@ -67,4 +67,24 @@ const intros = await get(`/intro_requests?requester_id=eq.${maya.user_id}&select
 for (const i of intros) await del(`/intro_requests/${i.id}`);
 console.log(`· cleared ${intros.length} introduction requests`);
 
+// 4. Undo anything the "grow the graph" demo added, so the before/after is fresh:
+//    delete ingested-only people (ing-*), detach ingested skills, and drop the
+//    quantum/rust sample facts from seeded people.
+{
+  const NEO = {
+    url: `${ENV.NEO4J_HOST}/db/${ENV.NEO4J_DB}/query/v2`,
+    auth: 'Basic ' + Buffer.from(`${ENV.NEO4J_USER}:${ENV.NEO4J_PASSWORD}`).toString('base64'),
+  };
+  const cypher = (statement) =>
+    fetch(NEO.url, {
+      method: 'POST',
+      headers: { Authorization: NEO.auth, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ statement }),
+    });
+  await cypher(`MATCH (p:Person) WHERE p.id STARTS WITH 'ing-' DETACH DELETE p`);
+  await cypher(`MATCH (s:Skill {category:'Ingested'}) DETACH DELETE s`);
+  await cypher(`MATCH (:Person)-[h:HAS_SKILL]->(s:Skill) WHERE s.name IN ['Quantum Error Correction','LLM Evaluation'] DELETE h`);
+  console.log('· reverted ingested graph facts');
+}
+
 console.log('\nready. maya.demo@warmpath.dev has 3 free searches and an empty inbox.');

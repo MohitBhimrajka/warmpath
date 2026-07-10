@@ -43,6 +43,7 @@ const FUNCTIONS = [
   { name: 'explain', file: 'functions/explain.ts', envVars: SHARED, timeoutMs: 90000 },
   { name: 'intro', file: 'functions/intro.ts', envVars: SHARED, timeoutMs: 60000 },
   { name: 'me', file: 'functions/me.ts', envVars: SHARED, timeoutMs: 20000 },
+  { name: 'ingest', file: 'functions/ingest.ts', envVars: SHARED, timeoutMs: 60000 },
   { name: 'billing', file: 'functions/billing.ts', envVars: { ...SHARED, ...STRIPE }, timeoutMs: 30000 },
   // Every 3 minutes: isolates evict around 5, so this leaves margin. Also keeps
   // Neo4j Aura from auto-pausing.

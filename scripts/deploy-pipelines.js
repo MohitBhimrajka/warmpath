@@ -23,7 +23,7 @@ const ENV = Object.fromEntries(
 const RR = ENV.RR_API_URL;
 const RR_KEY = ENV.RR_API_KEY;
 const TOKENS_PATH = new URL('../pipelines/tokens.json', import.meta.url);
-const PIPELINES = ['warmpath-extract', 'warmpath-explain'];
+const PIPELINES = ['warmpath-extract', 'warmpath-explain', 'warmpath-ingest'];
 
 const headers = { Authorization: `Bearer ${RR_KEY}`, 'Content-Type': 'application/json' };
 

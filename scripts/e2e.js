@@ -149,5 +149,15 @@ const fakeConfirm = await fn('billing', gate, { action: 'confirm', sessionId: bi
 ok('NEGATIVE: confirm refuses an unpaid session', fakeConfirm.status === 402,
   `got ${fakeConfirm.status} ${JSON.stringify(fakeConfirm.json)}`);
 
+console.log('\n── ingestion: watch the graph grow ──');
+const ing = await fn('ingest', maya, {
+  text: 'Tobias Fenwick gave a deep talk on homomorphic encryption and built a working FHE prototype for our privacy team.',
+});
+const wrote = ing.json?.written ?? [];
+ok('ingest extracts + writes a fact', ing.status === 200 && wrote.length >= 1, JSON.stringify(ing.json).slice(0, 200));
+ok('new person is created in the graph',
+  wrote.some((w) => /Fenwick/.test(w.person) && /encryption/i.test(w.skill + '') && w.isNewPerson === true),
+  JSON.stringify(wrote));
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
