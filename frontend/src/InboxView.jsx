@@ -98,6 +98,11 @@ function Outgoing({ row }) {
               {contact.expertEmail}
             </p>
             <p className="reveal-msg">{contact.introMessage}</p>
+            {contact.introFileUrl && (
+              <a className="btn btn-sm" href={contact.introFileUrl} target="_blank" rel="noopener" style={{ marginTop: 12, display: 'inline-block' }}>
+                Download intro (.txt)
+              </a>
+            )}
           </div>
         ) : (
           <button className="btn btn-sm" onClick={reveal}>

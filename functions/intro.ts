@@ -33,6 +33,41 @@ async function neo4j(env: any, statement: string, parameters: Record<string, unk
   return values.map((r: unknown[]) => Object.fromEntries(fields.map((f: string, i: number) => [f, r[i]])));
 }
 
+/** Save the drafted intro to Butterbase Storage; returns the object id (or null). */
+async function storeIntroFile(env: any, text: string): Promise<string | null> {
+  try {
+    const base = env.BB_API_URL ?? 'https://api.butterbase.ai';
+    const app = env.BB_APP_ID ?? env.BUTTERBASE_APP_ID;
+    const sizeBytes = new TextEncoder().encode(text).length;
+    const up = await fetch(`${base}/storage/${app}/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.BB_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: 'warm-intro.txt', contentType: 'text/plain', sizeBytes, public: true }),
+    });
+    if (!up.ok) return null;
+    const { uploadUrl, objectId } = await up.json();
+    const put = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'text/plain' }, body: text });
+    return put.ok ? objectId : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Mint a fresh presigned download URL for a stored intro. */
+async function introDownloadUrl(env: any, objectId: string): Promise<string | null> {
+  try {
+    const base = env.BB_API_URL ?? 'https://api.butterbase.ai';
+    const app = env.BB_APP_ID ?? env.BUTTERBASE_APP_ID;
+    const res = await fetch(`${base}/storage/${app}/download/${objectId}`, {
+      headers: { Authorization: `Bearer ${env.BB_API_KEY}` },
+    });
+    if (!res.ok) return null;
+    return (await res.json()).downloadUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Draft the intro note with Butterbase's AI gateway. Best-effort; falls back to a template. */
 async function draftIntro(env: any, payload: Record<string, unknown>): Promise<string> {
   const fallback =
@@ -170,10 +205,13 @@ export default async function handler(req: Request, ctx: any): Promise<Response>
       broker: Array.isArray(row.path_json) && row.path_json.length > 2 ? row.path_json[1]?.name : '',
     });
 
+    // Save the drafted intro to storage so the requester can download it.
+    const fileId = await storeIntroFile(ctx.env, message);
+
     const upd = await ctx.db.query(
-      `UPDATE intro_requests SET status = 'accepted', responded_at = now(), expert_email = $2, intro_message = $3
+      `UPDATE intro_requests SET status = 'accepted', responded_at = now(), expert_email = $2, intro_message = $3, intro_file_id = $4
        WHERE id = $1::uuid RETURNING id, status, expert_email, intro_message`,
-      [id, expert?.email ?? null, message],
+      [id, expert?.email ?? null, message, fileId],
     );
     if (!upd.rows.length) return json({ error: 'forbidden_by_policy' }, 403);
     return json(upd.rows[0]);
@@ -186,7 +224,14 @@ export default async function handler(req: Request, ctx: any): Promise<Response>
     if (!row) return json({ error: 'not_found' }, 404);
     if (row.requester_id !== uid) return json({ error: 'forbidden' }, 403);
     if (row.status !== 'accepted') return json({ error: 'not_consented', status: row.status }, 403);
-    return json({ id: row.id, expertName: row.expert_name, expertEmail: row.expert_email, introMessage: row.intro_message });
+    const introFileUrl = row.intro_file_id ? await introDownloadUrl(ctx.env, row.intro_file_id) : null;
+    return json({
+      id: row.id,
+      expertName: row.expert_name,
+      expertEmail: row.expert_email,
+      introMessage: row.intro_message,
+      introFileUrl,
+    });
   }
 
   return json({ error: `unknown action: ${action}` }, 400);
