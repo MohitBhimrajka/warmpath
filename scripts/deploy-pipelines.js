@@ -41,14 +41,35 @@ async function rr(path, init = {}) {
 
 const tokens = existsSync(TOKENS_PATH) ? JSON.parse(await readFile(TOKENS_PATH, 'utf8')) : {};
 
+// Store name → { token, spec } in the app DB so any function can recreate a
+// pipeline that RocketRide has terminated. The spec keeps the __BB_API_KEY__
+// placeholder — the secret is injected from the function's env at recreate time,
+// never persisted.
+async function upsertState(name, rawSpec, token) {
+  const spec = JSON.parse(rawSpec);
+  const res = await fetch(`${ENV.BB_API_URL}/v1/${ENV.BB_APP_ID}/pipeline_state`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ENV.BB_API_KEY}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({ name, token, spec }),
+  });
+  if (!res.ok) {
+    // fall back to update if the row already exists
+    await fetch(`${ENV.BB_API_URL}/v1/${ENV.BB_APP_ID}/pipeline_state?name=eq.${name}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${ENV.BB_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, spec }),
+    });
+  }
+}
+
 for (const name of PIPELINES) {
   if (tokens[name]) {
     const { json } = await rr(`/task?token=${tokens[name]}`, { method: 'DELETE' });
     console.log(`· ${name}: removed previous deployment (${json.status || 'gone'})`);
   }
 
-  const spec = (await readFile(new URL(`../pipelines/${name}.json`, import.meta.url), 'utf8'))
-    .replaceAll('__BB_API_KEY__', ENV.BB_API_KEY);
+  const rawSpec = await readFile(new URL(`../pipelines/${name}.json`, import.meta.url), 'utf8');
+  const spec = rawSpec.replaceAll('__BB_API_KEY__', ENV.BB_API_KEY);
 
   const { status, json } = await rr('/task', { method: 'POST', body: spec });
   if (status !== 200 || json.status !== 'OK' || !json.data?.token) {
@@ -56,7 +77,8 @@ for (const name of PIPELINES) {
     process.exit(1);
   }
   tokens[name] = json.data.token;
-  console.log(`✓ ${name}: ${json.data.token}`);
+  await upsertState(name, rawSpec, json.data.token);
+  console.log(`✓ ${name}: ${json.data.token}  (state seeded)`);
 
   const st = await rr(`/task?token=${json.data.token}`);
   const d = st.json.data || {};

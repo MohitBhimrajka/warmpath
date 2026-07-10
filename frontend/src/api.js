@@ -48,7 +48,6 @@ export const auth = {
 };
 
 export const me = () => fn('me', null, 'GET');
-export const setIdentity = (personId) => fn('me', { personId });
 export const search = (question) => fn('search', { question });
 export const explain = (searchId) => fn('explain', { searchId });
 

@@ -37,17 +37,25 @@ async function api(path, { method = 'POST', jwt, body } = {}) {
 
 const fn = (name, jwt, body, method = 'POST') => api(`/v1/${APP}/fn/${name}`, { method, jwt, body });
 
-async function ensureUser(email, personId) {
+async function ensureUser(email, expectPerson) {
   await api(`/auth/${APP}/signup`, { body: { email, password: PW, display_name: email } });
   const { json } = await api(`/auth/${APP}/login`, { body: { email, password: PW } });
   const jwt = json.access_token;
-  if (personId) await fn('me', jwt, { personId });
+  // Identity is bound by the on-auth hook (async, fire-and-forget). Poll /me
+  // until it settles rather than setting it from the client.
+  if (expectPerson) {
+    for (let i = 0; i < 12; i++) {
+      const me = (await fn('me', jwt, null, 'GET')).json;
+      if (me?.person?.name === expectPerson) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
   return jwt;
 }
 
 console.log('\n── identities ──');
-const maya = await ensureUser('maya.demo@warmpath.dev', 'p-maya');
-const chen = await ensureUser('chen.demo@warmpath.dev', 'p-chen');
+const maya = await ensureUser('maya.demo@warmpath.dev', 'Maya Rodriguez');
+const chen = await ensureUser('chen.demo@warmpath.dev', 'Chen Wei');
 ok('maya + chen logged in (unverified email is fine)', !!maya && !!chen);
 
 const mayaMe = (await fn('me', maya, null, 'GET')).json;
@@ -122,7 +130,7 @@ ok('intro message was drafted', (contact.json?.introMessage ?? '').length > 40);
 
 console.log('\n── freemium gate (fresh user, limit 3) ──');
 const gateEmail = `gate.${Date.now()}@warmpath.dev`;
-const gate = await ensureUser(gateEmail, 'p-maya');
+const gate = await ensureUser(gateEmail, 'Maya Rodriguez');
 let gateStatus = 0, n = 0;
 for (let i = 1; i <= 4; i++) {
   const r = await fn('search', gate, { question: 'who knows kubernetes' });

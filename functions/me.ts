@@ -34,6 +34,9 @@ export default async function handler(req: Request, ctx: any): Promise<Response>
   const uid = ctx.user.id;
   const limit = Number(ctx.env.FREE_SEARCH_LIMIT ?? 3);
 
+  // Identity is bound server-side by the on-auth hook, never chosen by the
+  // client — that's what stops anyone claiming another person's expert identity.
+  // This INSERT is only a safety net in case /me races ahead of the hook.
   await ctx.db.query(
     `INSERT INTO profiles (user_id, person_id) VALUES ($1::uuid, 'p-maya') ON CONFLICT (user_id) DO NOTHING`,
     [uid],
@@ -42,19 +45,6 @@ export default async function handler(req: Request, ctx: any): Promise<Response>
     `INSERT INTO subscriptions (user_id, plan) VALUES ($1::uuid, 'free') ON CONFLICT (user_id) DO NOTHING`,
     [uid],
   );
-
-  if (req.method === 'POST') {
-    let personId = '';
-    try {
-      personId = String((await req.json()).personId ?? '').trim();
-    } catch {
-      /* validated below */
-    }
-    if (!personId) return json({ error: 'personId is required' }, 400);
-    const exists = await neo4j(ctx.env, `MATCH (p:Person {id:$id}) RETURN p.id AS id`, { id: personId });
-    if (!exists.length) return json({ error: 'unknown person_id' }, 400);
-    await ctx.db.query(`UPDATE profiles SET person_id = $1 WHERE user_id = $2::uuid`, [personId, uid]);
-  }
 
   const profile = (await ctx.db.query(`SELECT person_id FROM profiles WHERE user_id = $1::uuid`, [uid])).rows[0];
   const plan = (await ctx.db.query(`SELECT plan FROM subscriptions WHERE user_id = $1::uuid`, [uid])).rows[0]?.plan ?? 'free';

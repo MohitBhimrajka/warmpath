@@ -53,6 +53,14 @@ const FUNCTIONS = [
     timeoutMs: 20000,
     trigger: { type: 'cron', config: { schedule: '*/3 * * * *' } },
   },
+  // Called by the auth system (service context), so no end-user auth.
+  {
+    name: 'on-auth',
+    file: 'functions/on-auth.ts',
+    envVars: SHARED,
+    timeoutMs: 15000,
+    trigger: { type: 'http', config: { auth: 'none' } },
+  },
 ];
 
 const only = process.argv[2];

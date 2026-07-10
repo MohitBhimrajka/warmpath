@@ -26,19 +26,56 @@ If the top two experts tie on proficiency and the ranking was decided by collabo
 If hops is -1 for the top expert, say plainly there is no warm path and this would be cold outreach.
 Address the requester as "you". Never invent facts absent from the JSON.`;
 
-async function rocketride(env: any, token: string, body: string): Promise<string> {
-  const res = await fetch(`${env.RR_API_URL}/task/data?token=${token}`, {
+// Self-healing: recreate a RocketRide pipeline that has been terminated. See
+// search.ts for the full rationale — name → {token, spec} lives in pipeline_state.
+async function rrRecreate(ctx: any, name: string, spec: any, staleToken: string | null): Promise<string> {
+  if (staleToken) {
+    await fetch(`${ctx.env.RR_API_URL}/task?token=${staleToken}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${ctx.env.RR_API_KEY}` },
+    }).catch(() => {});
+  }
+  const body = JSON.stringify(spec).replaceAll('__BB_API_KEY__', ctx.env.BB_API_KEY);
+  const res = await fetch(`${ctx.env.RR_API_URL}/task`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${env.RR_API_KEY}`, 'Content-Type': 'text/plain' },
+    headers: { Authorization: `Bearer ${ctx.env.RR_API_KEY}`, 'Content-Type': 'application/json' },
     body,
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`RocketRide ${res.status}: ${text.slice(0, 300)}`);
-  const answers = JSON.parse(text)?.data?.objects?.body?.answers;
-  if (!Array.isArray(answers) || !answers.length) {
-    throw new Error(`RocketRide returned no answers: ${text.slice(0, 300)}`);
+  const token = JSON.parse(await res.text())?.data?.token;
+  if (!token) throw new Error(`could not recreate pipeline ${name}`);
+  await ctx.db.query(
+    `INSERT INTO pipeline_state (name, token, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (name) DO UPDATE SET token = $2, updated_at = now()`,
+    [name, token],
+  );
+  return token;
+}
+
+async function rocketride(ctx: any, name: string, input: string): Promise<string> {
+  const row = (await ctx.db.query(`SELECT token, spec FROM pipeline_state WHERE name = $1`, [name])).rows[0];
+  if (!row) throw new Error(`pipeline ${name} not registered`);
+  let token: string = row.token;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!token) token = await rrRecreate(ctx, name, row.spec, null);
+    const res = await fetch(`${ctx.env.RR_API_URL}/task/data?token=${token}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ctx.env.RR_API_KEY}`, 'Content-Type': 'text/plain' },
+      body: input,
+    });
+    const text = await res.text();
+    const out = JSON.parse(text);
+    const answers = out?.data?.objects?.body?.answers;
+    if (Array.isArray(answers) && answers.length) return String(answers[answers.length - 1]).trim();
+
+    const errMsg = out?.data?.objects?.body?.error?.message ?? '';
+    if (attempt === 0 && /not running|terminated|wrong token/i.test(errMsg)) {
+      token = await rrRecreate(ctx, name, row.spec, token);
+      continue;
+    }
+    throw new Error(`RocketRide ${name} returned no answers: ${text.slice(0, 300)}`);
   }
-  return String(answers[answers.length - 1]).trim();
+  throw new Error(`RocketRide ${name} unreachable`);
 }
 
 export default async function handler(req: Request, ctx: any): Promise<Response> {
@@ -67,8 +104,8 @@ export default async function handler(req: Request, ctx: any): Promise<Response>
 
   try {
     const explanation = await rocketride(
-      ctx.env,
-      ctx.env.RR_TOKEN_EXPLAIN,
+      ctx,
+      'warmpath-explain',
       `${EXPLAIN_INSTRUCTIONS}\n\n${JSON.stringify({
         question,
         requester: result.requesterName ?? 'you',
