@@ -21,27 +21,35 @@ Introductions are **double-consent**: the expert's contact details do not exist 
 
 ## Architecture
 
-```
-browser (end-user JWT)
-  │
-  └─▶ Butterbase serverless function  (auth: required, Deno isolate)
-        │
-        ├─▶ RocketRide Cloud  POST /task/data      ── LLM: question → canonical skill
-        │      warmpath-extract  ·  claude-haiku-4.5
-        │
-        ├─▶ Neo4j Aura  POST /db/…/query/v2        ── PINNED Cypher: rank + shortestPath
-        │      expert lookup ∪ project evidence, degree centrality, ≤4-hop path
-        │
-        └─▶ RocketRide Cloud  POST /task/data      ── LLM: explain the warm path
-               warmpath-explain  ·  claude-sonnet-5
-                  │
-                  └─ both pipelines call Butterbase's AI gateway as their model provider
+```mermaid
+flowchart TD
+    B["Browser · React SPA<br/>(end-user JWT, realtime WS)"]
+    subgraph BB["Butterbase — auth · Postgres+RLS · functions · AI gateway · storage · realtime · frontend"]
+      SF["fn: search / explain / ingest / intro / billing / me"]
+      AG["AI gateway<br/>(model provider for the pipelines)"]
+    end
+    RR["RocketRide Cloud · 3 pipelines<br/>extract · explain · ingest"]
+    NEO["Neo4j Aura<br/>HTTP Query API"]
+    ST["Stripe (test) · Checkout"]
 
-Butterbase also provides:  auth · Postgres + RLS · the AI gateway · the deployed frontend
-Stripe (test mode) provides: the Pro upgrade — Checkout session created and verified server-side
+    B -->|"auth: required"| SF
+    B <-->|"realtime WS · intro_requests"| SF
+    SF -->|"POST /task/data"| RR
+    RR -->|"OpenAI-compatible"| AG
+    SF -->|"pinned Cypher: rank + shortestPath"| NEO
+    SF -->|"Checkout + server-side confirm"| ST
+
+    classDef bb fill:#1d2733,stroke:#f2a65a,color:#e6edf3;
+    class BB,SF,AG bb;
 ```
 
-The browser never holds the RocketRide key, the Neo4j password, or any Stripe secret. All three live in the function's encrypted `envVars`.
+**Query path** (every search): browser → Butterbase `search` fn → RocketRide extracts the skill → Neo4j ranks experts + traces the ≤4-hop warm path → `explain` fn → RocketRide writes the briefing. Both pipelines use Butterbase's AI gateway as their model provider, so Butterbase is load-bearing *inside* RocketRide too.
+
+**Ingestion path** ("grow the graph"): browser → `ingest` fn → RocketRide extracts `{person, skill, evidence}` triples → the backend MERGEs them into Neo4j with deterministic Cypher. New expertise is searchable, with a warm path, seconds later.
+
+**Consent path**: double-consent enforced in Postgres RLS; when the expert accepts, a realtime WebSocket pushes the update to the requester live, the drafted intro is saved to Butterbase Storage, and contact is revealed.
+
+The browser never holds the RocketRide key, the Neo4j password, or any Stripe secret. All live in the functions' encrypted `envVars`. RocketRide pipelines are **self-healing** — specs live in a `pipeline_state` table and any function recreates a terminated pipeline and retries, so a stale token can never break a search.
 
 ### Why each platform is load-bearing
 
@@ -49,7 +57,7 @@ The browser never holds the RocketRide key, the Neo4j password, or any Stripe se
 
 **RocketRide Cloud** — two pipelines are deployed to `api.rocketride.ai` and invoked on **every single search at runtime**, not at build time. One turns the question into a canonical skill; the other writes the introduction briefing from the graph rows.
 
-**Butterbase** — auth (every route gated), the application database with row-level security, the AI gateway that powers both RocketRide pipelines, the serverless functions that orchestrate everything, and the deployed frontend.
+**Butterbase** — end to end: email/password **auth** (every route gated) with a post-auth **hook** that binds graph identity server-side, the **Postgres database** with **row-level security** that enforces double-consent, the **AI gateway** that powers all three RocketRide pipelines, six **serverless functions**, **realtime** WebSockets for the live consent inbox, **storage** for the downloadable intro, **payments** (Stripe Checkout via a function), and the **deployed frontend**.
 
 ---
 
@@ -110,19 +118,26 @@ Butterbase's native app billing runs on a **live-mode** Stripe Connect platform 
 
 ```
 pipelines/       RocketRide Cloud pipeline definitions (JSON) + deploy script
+  warmpath-extract / warmpath-explain / warmpath-ingest
 functions/       Butterbase serverless functions (Deno)
-  search.ts        free-tier gate → RocketRide extract → Neo4j
-  explain.ts       RocketRide explain (split out so experts render in ~8s, not ~16s)
-  intro.ts         double-consent create / respond / contact
+  search.ts        free-tier gate → RocketRide extract → Neo4j (+ neighbourhood subgraph)
+  explain.ts       RocketRide explain (split out so experts render in ~7s, not ~13s)
+  ingest.ts        RocketRide extract triples → deterministic Neo4j MERGE
+  intro.ts         double-consent create / respond / contact + storage
   me.ts            identity, plan, remaining searches
   billing.ts       Stripe Checkout + server-side confirmation
+  on-auth.ts       auth hook: binds graph identity by email, server-side
+  warm.ts          cron: keeps Neo4j + the pipelines warm; self-heals dead pipelines
 scripts/
   graph.js         Neo4j HTTP Query API client
   seed.js          deterministic seed + 6 assertions
-  deploy-pipelines.js
-  deploy-functions.js
-  e2e.js           23 assertions against the live deployment
+  deploy-pipelines.js / deploy-functions.js
+  e2e.js           25 assertions against the live deployment
+  reset-demo.js    put the demo back to a clean, repeatable state
 frontend/        Vite + React SPA
+  GraphView.jsx    force-directed neighbourhood graph, warm path lit
+  TrustPath.jsx    the trust-filament path chain
+  IngestView.jsx   "grow the graph"
 ```
 
 ## Running it

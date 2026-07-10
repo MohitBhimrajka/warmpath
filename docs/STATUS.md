@@ -2,6 +2,23 @@
 
 Last updated during the build. This is the honest accounting: what's done, what was cut, what's broken, and what would move us from "qualifies" to "wins."
 
+## Progress since the audit (the winning push)
+
+All Tier-1 and Tier-2 roadmap items are **done and verified live** (25/25 e2e):
+
+- **Ingestion pipeline + "grow the graph"** — 2nd RocketRide pipeline; paste text → triples → Neo4j MERGE → searchable with a warm path. The demo centrepiece.
+- **Force-directed graph visualization** — the neighbourhood as a real graph, warm path lit, tap-to-reroute. The money shot.
+- **Identity secured** — server-side binding via an auth hook; the hijack is closed (verified).
+- **RocketRide self-healing** — dead pipelines recreate + retry transparently; the stale-token 502 is gone.
+- **Realtime consent inbox** — expert accepts → requester's inbox/badge update live over a WebSocket.
+- **Storage** — the drafted intro is saved and downloadable.
+- **Gmail integration** — toolkit configured (managed OAuth); sending is one connected account away.
+- **Native payments** — proven impossible from our side (Butterbase platform Connect isn't operational); documented, kept the real Stripe-via-function flow.
+
+Measured Butterbase categories now exercised: auth (+ hook), database + RLS, functions, AI gateway, deployed frontend, **realtime**, **storage**, **integrations**. Remaining named category not yet on: **OAuth login** (needs your Google Cloud client id/secret).
+
+**Blocked on you:** LinkedIn URL + phone (to submit); optionally a Gmail connect (to actually send) and Google OAuth creds (for social login).
+
 ---
 
 ## 1. Where we actually are
