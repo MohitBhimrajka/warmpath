@@ -7,6 +7,9 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+/** WebSocket URL for realtime table changes (RLS-scoped to the token's user). */
+export const realtimeUrl = () => `${API.replace(/^http/, 'ws')}/v1/${APP}/realtime?token=${getToken()}`;
+
 /** Thrown for any non-2xx so callers can branch on `status` (notably 402). */
 export class ApiError extends Error {
   constructor(status, body) {

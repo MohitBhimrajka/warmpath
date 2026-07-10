@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { me as fetchMe, billing, auth, getToken } from './api';
+import { me as fetchMe, billing, auth, getToken, realtimeUrl } from './api';
 import Login from './Login';
 import SearchView from './SearchView';
 import InboxView from './InboxView';
@@ -120,6 +120,7 @@ export default function App() {
   const [view, setView] = useState('search');
   const [paywall, setPaywall] = useState(false);
   const [notice, setNotice] = useState('');
+  const [liveTick, setLiveTick] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -129,6 +130,46 @@ export default function App() {
       setAuthed(false);
     }
   }, []);
+
+  // Live consent: subscribe to intro_requests over a realtime WebSocket. RLS
+  // means each side only hears about rows they're party to, so when the expert
+  // accepts, the requester's badge and inbox update without a refresh. Kept at
+  // the top level so the badge stays live on any screen.
+  useEffect(() => {
+    if (!authed) return;
+    let ws;
+    let closed = false;
+    let retry;
+    const connect = () => {
+      try {
+        ws = new WebSocket(realtimeUrl());
+      } catch {
+        return;
+      }
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', table: 'intro_requests' }));
+      ws.onmessage = (ev) => {
+        let msg;
+        try {
+          msg = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (msg.type === 'change') {
+          refresh();
+          setLiveTick((t) => t + 1);
+        }
+      };
+      ws.onclose = () => {
+        if (!closed) retry = setTimeout(connect, 3000);
+      };
+    };
+    connect();
+    return () => {
+      closed = true;
+      clearTimeout(retry);
+      ws?.close();
+    };
+  }, [authed, refresh]);
 
   // Returning from Stripe Checkout: confirm server-side, never trust the query string.
   useEffect(() => {
@@ -263,7 +304,7 @@ export default function App() {
               }}
             />
           )}
-          {view === 'inbox' && <InboxView onRefresh={refresh} />}
+          {view === 'inbox' && <InboxView onRefresh={refresh} liveTick={liveTick} />}
         </main>
       </div>
 

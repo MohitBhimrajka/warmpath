@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { search, explain, intros, ApiError } from './api';
 import TrustPath from './TrustPath';
+import GraphView from './GraphView';
 
 const EXAMPLES = [
   'Who knows about SAP integration?',
@@ -158,6 +159,7 @@ export default function SearchView({ onUsage, onPaywall }) {
   const [briefing, setBriefing] = useState(null);
   const [error, setError] = useState('');
   const [requested, setRequested] = useState([]);
+  const [selectedExpert, setSelectedExpert] = useState(null);
   const stageTimer = useRef(null);
 
   const onRequested = useCallback((id) => setRequested((r) => (r.includes(id) ? r : [...r, id])), []);
@@ -186,6 +188,7 @@ export default function SearchView({ onUsage, onPaywall }) {
         clearTimeout(stageTimer.current);
         setResult(res);
         setRequested(res.pendingIntros ?? []);
+        setSelectedExpert(res.experts?.[0]?.id ?? null);
         onUsage(res);
 
         if (res.experts.length) {
@@ -271,6 +274,16 @@ export default function SearchView({ onUsage, onPaywall }) {
           <p className="sr-only" role="status">
             {experts.length} {experts.length === 1 ? 'person' : 'people'} found with {result.skill}.
           </p>
+
+          {experts.length > 0 && result.graph?.nodes?.length > 1 && (
+            <GraphView
+              graph={result.graph}
+              requesterId={result.requesterId}
+              experts={experts}
+              selectedId={selectedExpert}
+              onSelect={setSelectedExpert}
+            />
+          )}
 
           {experts.length > 0 && (
             <div className="briefing">

@@ -452,6 +452,53 @@ a {
   }
 }
 
+/* The graph visualization — the hero of the results. */
+.graphviz {
+  margin: 24px 0 8px;
+}
+.graphviz-cap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.graphviz-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-mute);
+}
+.graphviz-frame {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: radial-gradient(ellipse 70% 90% at 50% 40%, #10161d 0%, var(--bg) 100%);
+  overflow: hidden;
+}
+.graphviz svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.graphviz-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  pointer-events: none;
+}
+.graphviz-node--click {
+  cursor: pointer;
+}
+.graphviz-node--click:hover circle {
+  filter: brightness(1.25);
+}
+.graphviz-node:focus,
+.graphviz-node:focus-visible {
+  outline: none;
+}
+.graphviz-node--click:focus-visible circle {
+  stroke: var(--ember);
+  stroke-width: 3;
+}
+
 /* Briefing: the LLM's prose, set as a panel rather than a chat bubble. This is
    the answer, so it should be the second thing the eye lands on. */
 .briefing {

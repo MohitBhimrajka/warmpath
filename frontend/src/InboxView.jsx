@@ -109,7 +109,7 @@ function Outgoing({ row }) {
   );
 }
 
-export default function InboxView({ onRefresh }) {
+export default function InboxView({ onRefresh, liveTick = 0 }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 
@@ -121,9 +121,11 @@ export default function InboxView({ onRefresh }) {
       setError('Could not load your introductions.');
     }
   }
+  // Reload on mount and whenever a realtime change arrives (liveTick bumps).
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick]);
 
   if (error) return <p className="error">{error}</p>;
   if (!data) return <div className="empty">Loading…</div>;

@@ -205,7 +205,29 @@ export default async function handler(req: Request, ctx: any): Promise<Response>
     const requesterName = rows[0]?.requesterName ?? 'you';
     const experts = rows.map(({ requesterName: _drop, ...e }: any) => e);
 
-    const result = { skill, intent: extracted.intent ?? null, experts, requesterName };
+    // The neighbourhood subgraph, for the visual: every person on any warm path
+    // plus the experts and the requester, and the COLLABORATED_WITH edges among
+    // them — so the picture shows the dense web the sparse warm path threads
+    // through, not just the line. Two small reads, run alongside each other.
+    const ids = Array.from(
+      new Set([requesterId, ...experts.flatMap((e: any) => [e.id, ...e.chain.map((n: any) => n.id)])]),
+    );
+    let graph = { nodes: [] as any[], edges: [] as any[] };
+    if (ids.length > 1) {
+      const [nodes, edges] = await Promise.all([
+        neo4j(ctx.env, `MATCH (p:Person) WHERE p.id IN $ids RETURN p.id AS id, p.name AS name, p.team AS team`, { ids }),
+        neo4j(
+          ctx.env,
+          `MATCH (a:Person)-[c:COLLABORATED_WITH]-(b:Person)
+           WHERE a.id IN $ids AND b.id IN $ids AND a.id < b.id
+           RETURN a.id AS a, b.id AS b, c.strength AS strength, c.context AS context`,
+          { ids },
+        ),
+      ]);
+      graph = { nodes, edges };
+    }
+
+    const result = { skill, intent: extracted.intent ?? null, experts, requesterName, graph };
     await ctx.db.query(`UPDATE searches SET skill = $1, result_json = $2::jsonb WHERE id = $3::uuid`, [
       skill,
       JSON.stringify(result),
@@ -221,7 +243,7 @@ export default async function handler(req: Request, ctx: any): Promise<Response>
       )
     ).rows.map((r: any) => r.expert_person_id);
 
-    return json({ ...result, searchId, requesterId, plan, used: used + 1, limit, pendingIntros });
+    return json({ ...result, graph, searchId, requesterId, plan, used: used + 1, limit, pendingIntros });
   } catch (err) {
     // Don't charge a free search for our own failure.
     await ctx.db.query(`DELETE FROM searches WHERE id = $1::uuid`, [searchId]);
