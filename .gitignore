@@ -1,0 +1,8 @@
+.env
+.env.*
+node_modules/
+frontend/dist/
+frontend/node_modules/
+*.zip
+pipelines/tokens.json
+!frontend/.env.production

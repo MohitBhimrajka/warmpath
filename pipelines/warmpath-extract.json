@@ -1,0 +1,38 @@
+{
+  "name": "warmpath-extract",
+  "description": "WarmPath: natural-language question -> target skill + intent, as strict JSON.",
+  "_note": "No `prompt` node on purpose. A `prompt` node fed by a long-lived `webhook` source never closes, so it accumulates every request it has ever seen into its Context and replays them: call N returns the answers for calls 1..N and latency grows without bound. `question` -> llm is stateless. The system instructions therefore travel in the request body (see functions/prompts.js).",
+  "components": [
+    {
+      "id": "src",
+      "provider": "webhook",
+      "config": { "type": "webhook", "hideForm": true, "mode": "Source" }
+    },
+    {
+      "id": "q",
+      "provider": "question",
+      "config": { "type": "question" },
+      "input": [{ "lane": "text", "from": "src" }]
+    },
+    {
+      "id": "llm",
+      "provider": "llm_openai_api",
+      "config": {
+        "profile": "custom",
+        "custom": {
+          "model": "anthropic/claude-haiku-4.5",
+          "base_url": "https://api.butterbase.ai/v1",
+          "modelTotalTokens": 200000,
+          "apikey": "__BB_API_KEY__"
+        }
+      },
+      "input": [{ "lane": "questions", "from": "q" }]
+    },
+    {
+      "id": "out",
+      "provider": "response_answers",
+      "config": { "laneName": "answers" },
+      "input": [{ "lane": "answers", "from": "llm" }]
+    }
+  ]
+}

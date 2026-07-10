@@ -1,0 +1,38 @@
+{
+  "name": "warmpath-explain",
+  "description": "WarmPath: graph rows (experts + collaboration path) -> natural-language warm-intro explanation.",
+  "_note": "See warmpath-extract.json — the `prompt` node accumulates across requests when fed by a webhook, so instructions travel in the body instead.",
+  "components": [
+    {
+      "id": "src",
+      "provider": "webhook",
+      "config": { "type": "webhook", "hideForm": true, "mode": "Source" }
+    },
+    {
+      "id": "q",
+      "provider": "question",
+      "config": { "type": "question" },
+      "input": [{ "lane": "text", "from": "src" }]
+    },
+    {
+      "id": "llm",
+      "provider": "llm_openai_api",
+      "config": {
+        "profile": "custom",
+        "custom": {
+          "model": "anthropic/claude-haiku-4.5",
+          "base_url": "https://api.butterbase.ai/v1",
+          "modelTotalTokens": 200000,
+          "apikey": "__BB_API_KEY__"
+        }
+      },
+      "input": [{ "lane": "questions", "from": "q" }]
+    },
+    {
+      "id": "out",
+      "provider": "response_answers",
+      "config": { "laneName": "answers" },
+      "input": [{ "lane": "answers", "from": "llm" }]
+    }
+  ]
+}
